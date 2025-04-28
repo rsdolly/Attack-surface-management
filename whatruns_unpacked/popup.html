@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Whatruns Popup</title>
+		<link href='css/font-lato.css' rel='stylesheet' type='text/css'>
+		<link rel="stylesheet" href="css/popup.css">
+		<script src="js/browser-polyfill.js"></script>
+		<script src="js/jquery-3.2.1.min.js"></script>
+		<script src="js/bootstrap-tooltip.js"></script>
+		<script src="js/global.constants.js"></script>
+		<script src="js/popup_final.js"></script>
+		<script src="js/popup_final_extension.js"></script>
+	</head>
+	<body>
+		<div class="body-header">
+				<div class="body-header-wrap">
+					<div class="inline-block">
+						<h3> What runs <span class="current-site-name"  id="current-site-name" style="font-weight:normal;"></span>?</h3>
+					</div>
+					<div class="body-header-buttons">
+						<div class="inline-block header-btn back" data-toggle="tooltip" data-placement="bottom" title="Back">	
+							<img src="images/back.svg" class="btn-back">
+						</div>
+						<div class="inline-block header-btn user-already-following" data-toggle="tooltip" data-placement="bottom" title="Following">
+							<img src="images/already-following.png" class="btn-already-following">
+						</div>
+						<div class="inline-block header-btn user-follow" data-toggle="tooltip" data-placement="bottom" title="Follow">	
+							<img src="images/Follow.svg" class="btn-follow">
+						</div>
+						<div class="inline-block  header-btn user-following" data-toggle="tooltip" data-placement="bottom" title="Your Sites">	
+							<img src="images/Following.png" class="btn-following">
+						</div>
+						<div class="inline-block header-btn share-url share-url-header-icon" data-toggle="tooltip" data-placement="bottom" title="">
+							<img src="images/Share.svg" class="btn-share">
+							<img src="images/share-dark.svg" class="btn-share-dark">
+						</div>
+						<div class="inline-block whatruns-dark" data-toggle="tooltip" data-placement="bottom" title="Dark">	
+							<img src="images/dark.svg" class="btn-dark">
+						</div>
+						<div class="inline-block whatruns-white" data-toggle="tooltip" data-placement="bottom" title="White">	
+							<img src="images/light.svg" class="btn-white">
+						</div>
+					</div>
+					
+				</div>
+		</div>
+		<div class="loading">
+			<img src="images/Whatruns loading.gif" alt="">
+			<p>Analyzing the website....</p>
+		  </div>
+		<div class="content">
+		  <div class="container current-app-info active">
+			  <div class="list" id="tech-info">	
+				  <div id="even" class="even"></div>
+				  <div id="odd" class="odd"></div>
+			  </div>
+				<div class="cookie-policy hide">
+					<div class="cookie-policy-inner">
+						<span class="cookie-content">
+							WhatRuns reads the source code of websites you visit, we do not collect any information that identifies you personally. Read more on our 
+							<a href="https://www.whatruns.com/privacy" target="_blank"> privacy policy.</a>
+						</span>
+						<span class="close">
+							<img class="close_light" src="images/close_1.svg" alt="Close"/>
+							<img class="close_dark" src="images/close_2.svg" alt="Close">
+						</span>
+					</div>
+				</div>
+		  </div>
+		  <div class="whatruns-review-container hide">
+			<div class="whatruns-review">
+			  <div class="whatruns-review-wrap">
+				  <img class="whatruns-review-logo" src="images/review_img1.svg" alt="">
+				  <div>
+					WhatRuns made you feel like a hacking genius?</span>
+				  </div>
+				  <p>
+					We promise we won't tell the Feds!
+				  </p>
+				  <img class="whatruns-review-rating" src="/images/rating1.svg" alt="">
+			  </div>
+			  <button class="whatruns-review-button">Write a Review</button>
+			  <button class="whatruns-later-button">May be later</button>
+  
+		  </div>
+		  </div>
+		  
+		  <div class="container block signup">
+		  	<form class="form signup-form" url="register" method="POST">
+		  		<div class="form-heading">
+		  			Sign up
+		  		</div>
+		  		<div class="form-group">
+		  			
+		  			<input type="email" class="form-control" name="email" placeholder="Email" autocomplete="off" >
+		  		</div>
+		  		<div class="form-group">
+		  			
+		  			<input type="password" class="form-control" name="password" placeholder="Password" autocomplete="off" >
+		  		</div>
+		  		<div class="form-bottom">By clicking this button, you agree to our <a href="http://whatruns.com/terms" target="_blank">terms of service.</a></div>
+		  		<div class="result"></div>
+		  		<input type="text" class="form-control hide" name="source" value="extension" style="display:none;">
+		  		<button type="submit" class="btn btn-sm btn-primary">Sign up</button>
+		  		<div class="form-bottom">
+		  			<div class="">Already have an account? <a class="btn-signin">Sign in</a></div>
+		  		</div>
+		  	</form>
+		  </div>
+		  <div class="container block signin">
+		  	<form class="form signin-form" url="extension_signin" method="POST">	
+		  		<div class="form-heading">
+		  			Sign in to follow <span class="current-site-name"></span>
+		  		</div>
+		  		<div class="form-group">
+		  			
+		  			<input type="email" class="form-control" name="email" placeholder="Email" autocomplete="off" >
+		  		</div>
+		  		<div class="form-group">
+		  			
+		  			<input type="password" class="form-control" name="password" placeholder="Password" autocomplete="off" >
+		  		</div>
+		  		<div class="result"></div>
+		  		<button type="submit" class="btn btn-sm btn-primary">Sign in</button>
+		  		<div class="form-bottom">Don’t have an account?<a class="btn-signup"> Sign up here</a></div>
+		  	</form>
+		  </div>
+		  <div class="container block following">
+				<div class="following-sites">
+					<div class="following-sites-list"></div>
+				</div>
+		  </div>
+		  <div class="container block share-container">
+		  		<div style="padding:20px;">
+				   <div class="share-url-heading">
+					   <h4>Share what runs <span class="current-site-name current-site-name-regular"></span></h4>
+				   </div>
+				   <div class="share-url-body">	
+					   <div class="form-group">
+					   		<div class="inner-addon left-addon">
+					   			<img class="copy-link-img" src="images/copy-link.svg">
+								<img class="copy-link-dark-img" src="images/copy-link-dark.svg">
+						   		<input type="text" class="form-control share-url-original" readonly autocomplete="off" >
+						   	</div>
+					   </div>
+				   </div>
+				   <div class="share-url-footer text-center">
+					   <div class="inline-block share-facebook share-common" data-toggle="tooltip" data-placement="bottom" title="Share on Facebook">
+						 <button class="btn btn-default btn-sm share-btn ">  <img src="images/Facebook.svg"> </button>
+					   </div>
+					   <div class="inline-block share-twitter share-common" data-toggle="tooltip" data-placement="bottom" title="Share on Twitter">
+						<a href="" target="_blank" class="twitter-share-href"><button class="btn btn-default btn-sm share-btn">    <img src="images/Twitter.svg"> </button></a>
+					   </div>
+					   <div class="inline-block share-email share-common" data-toggle="tooltip" data-placement="bottom" title="Send as an Email">
+						  <button class="btn btn-default btn-sm share-btn">  <img src="images/Email.svg"> </button>
+					   </div>
+				   </div>
+			</div>
+		  </div>
+		  <div class="container block email-share-container">
+		  	<div class="share-email-container">
+				  <form id="email-share-form">
+				  		<h4>Share as an Email</h4>
+					  <div class="form-group">
+						  <input type="text" class="form-control" name="name" placeholder="Your name" autocomplete="off" >
+					  </div>
+					  <div class="form-group">
+						  <input type="text" class="form-control" name="email" placeholder="Email address you want to share" autocomplete="off" >
+					  </div>
+					  <div class="form-group">
+						  <button type="submit" class="btn btn-primary share-email-submit btn-sm btn-success">Share</button>
+					  </div>
+					  <div class="result" style="margin:5px 0px;"></div>
+				  </form>
+				</div>
+		  </div>
+		</div>
+		<div class="footer">
+			  <p><a href="https://www.whatruns.com/" target="_blank"><img src="images/Logo.svg"></a></p>
+		</div>
+	</body>
+</html>

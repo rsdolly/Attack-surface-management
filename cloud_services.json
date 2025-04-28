@@ -1,0 +1,78 @@
+{
+  "AWS S3": {
+    "pattern": "s3.amazonaws.com",
+    "error_signatures": ["NoSuchBucket", "The specified bucket does not exist"],
+    "ip_patterns": [
+      "52.216.0.0/14", 
+      "54.231.0.0/16",
+      "52.95.0.0/16",
+      "52.46.0.0/16"
+    ]
+  },
+  "GitHub Pages": {
+    "pattern": "github.io",
+    "error_signatures": ["There isn't a GitHub Pages site here", "404 Not Found"],
+    "ip_patterns": [
+      "185.199.108.0/22",
+      "185.199.110.0/22",
+      "185.199.111.0/22"
+    ]
+  },
+  "Heroku": {
+    "pattern": "herokudns.com",
+    "error_signatures": ["No such app", "herokudns.com error"],
+    "ip_patterns": [
+      "52.19.0.0/16",
+      "54.83.0.0/16",
+      "54.196.0.0/15"
+    ]
+  },
+  "Bitbucket": {
+    "pattern": "bitbucket.io",
+    "error_signatures": ["Repository not found"],
+    "ip_patterns": [
+      "104.192.143.0/24",
+      "104.192.144.0/24"
+    ]
+  },
+  "Shopify": {
+    "pattern": "myshopify.com",
+    "error_signatures": ["Sorry, this shop is currently unavailable"],
+    "ip_patterns": [
+      "23.227.38.32/30",
+      "23.227.38.64/30"
+    ]
+  },
+  "Fastly": {
+    "pattern": "fastly.net",
+    "error_signatures": ["Fastly error: unknown domain"],
+    "ip_patterns": [
+      "151.101.0.0/16",
+      "151.101.64.0/18"
+    ]
+  },
+  "Google Cloud Storage": {
+    "pattern": "storage.googleapis.com",
+    "error_signatures": ["No such bucket", "Bucket not found"],
+    "ip_patterns": [
+      "130.211.0.0/22",
+      "35.190.0.0/22"
+    ]
+  },
+  "Microsoft Azure": {
+    "pattern": "azurewebsites.net",
+    "error_signatures": ["404 Not Found", "This site can't be reached"],
+    "ip_patterns": [
+      "13.64.0.0/11",
+      "40.112.0.0/12"
+    ]
+  },
+  "Cloudflare": {
+    "pattern": "cloudflare.com",
+    "error_signatures": ["Page not found", "No such zone"],
+    "ip_patterns": [
+      "104.16.0.0/12",
+      "172.64.0.0/13"
+    ]
+  }
+}
