@@ -1,132 +1,135 @@
-import requests
 import dns.resolver
+import requests
 import json
-import os
-from ipwhois import IPWhois
+import ipaddress
 
-# Load cloud service patterns and error signatures from a JSON file
-def load_cloud_service_patterns(file="cloud_services.json"):
-    if not os.path.exists(file):
-        print(f"[!] {file} not found.")
-        return {}
-    with open(file, 'r') as f:
-        return json.load(f)
-
-# Load subdomains from the file
-def load_subdomains(file="subdomains.txt"):
-    if not os.path.exists(file):
-        print(f"[!] {file} not found.")
-        return []
-    with open(file, "r") as f:
-        return [line.strip() for line in f.readlines()]
-
-# Resolve CNAME for a subdomain
-def get_cname(subdomain):
+def check_service(subdomain, service_config):
+    """Checks if a subdomain points to an unclaimed cloud service."""
     try:
-        answers = dns.resolver.resolve(subdomain, 'CNAME')
+        resolver = dns.resolver.Resolver()
+        answers = resolver.resolve(subdomain, 'CNAME')
         for rdata in answers:
-            cname = str(rdata.target).rstrip('.')
-            # Ignore self-referencing CNAMEs
-            if cname == subdomain:
-                return None
-            return cname
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, dns.exception.Timeout):
-        return None
+            if service_config['pattern'] in str(rdata).lower():
+                url = f"http://{subdomain}"
+                try:
+                    response = requests.get(url, timeout=5)
+                    for error_signature in service_config['error_signatures']:
+                        if error_signature in response.text:
+                            return True, service_config['name']
+                except requests.exceptions.RequestException:
+                    pass
 
-def get_a_record(subdomain):
-    try:
-        answers = dns.resolver.resolve(subdomain, 'A')
-        return [rdata.to_text() for rdata in answers]
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, dns.exception.Timeout):
-        return []
-    
-# Check for potential takeover by matching the signature
-def is_orphaned(subdomain, signatures):
-    try:
-        url = f"http://{subdomain}"
-        response = requests.get(url, timeout=5)
-        content = response.text
-        for signature in signatures:
-            if signature.lower() in content.lower():
-                return True
-    except requests.exceptions.RequestException:
+        # Additional check: verify IP address ranges
+        try:
+            answers = resolver.resolve(subdomain, 'A')
+            for rdata in answers:
+                ip_address = str(rdata)
+                for ip_range in service_config.get('ip_patterns', []):
+                    if ipaddress.ip_address(ip_address) in ipaddress.ip_network(ip_range):
+                        # If CNAME check failed, but IP matches, it might be a takeover
+                        return True, service_config['name']
+
+        except dns.resolver.NXDOMAIN:
+            pass
+        except dns.resolver.NoAnswer:
+            pass
+
+    except dns.resolver.NXDOMAIN:
         pass
-    return False
+    except dns.resolver.NoAnswer:
+        pass
+    return False, None
 
-def get_ip_info(ip):
+def get_risk_impact(service):
+    """Returns a brief risk and impact description for a given service."""
+    risk_impact = {
+        "AWS S3": (
+            "Risk: Unauthorized access to data in a previously associated S3 bucket.",
+            "Impact: Data breaches, data loss, serving malicious content."
+        ),
+        "GitHub Pages": (
+            "Risk: Hosting malicious content or phishing pages on a trusted subdomain.",
+            "Impact: Brand impersonation, credential theft, malware distribution."
+        ),
+        "Heroku": (
+            "Risk: Hosting unwanted applications or content on the subdomain.",
+            "Impact: Brand damage, misleading or malicious activity."
+        ),
+        "Bitbucket": (
+            "Risk: Potential to host content if the Bitbucket Pages repo was deleted.",
+            "Impact: Brand damage, potential for malicious content."
+        ),
+        "Shopify": (
+            "Risk: An attacker could claim the subdomain for a new, malicious Shopify store.",
+            "Impact: Phishing attacks, brand impersonation, fraudulent activities."
+        ),
+        "Fastly": (
+            "Risk: An attacker could configure the subdomain in their Fastly account.",
+            "Impact: Brand damage, serving malicious content or phishing pages."
+        ),
+        "Google Cloud Storage": (
+            "Risk: Unauthorized access to or control over content in a GCS bucket.",
+            "Impact: Data breaches, data loss, serving malicious content."
+        ),
+        "Microsoft Azure": (
+            "Risk: Ability to host unwanted content or apps via Azure App Service.",
+            "Impact: Brand damage, misleading or malicious activity."
+        ),
+        "Cloudflare": (
+            "Risk: An attacker could add the subdomain to their Cloudflare account.",
+            "Impact: Brand impersonation, serving malicious content or phishing pages."
+        )
+    }
+    return risk_impact.get(service, ("Risk: Unknown", "Impact: Unknown"))
+
+def main():
+    # Load cloud services from JSON
     try:
-        ipwhois = IPWhois(ip)
-        result = ipwhois.lookup_rdap()
-        return result.get("network", {}).get("name", "Unknown")
-    except Exception as e:
-        print(f"[!] Error looking up IP {ip}: {e}")
-        return None
-    
-# Detect subdomain takeovers by matching CNAME and cloud service patterns
-def detect_potential_takeovers(subdomains, cloud_patterns):
-    results = []
-    for sub in subdomains:
-        cname = get_cname(sub)
-        if cname:
-            for service, info in cloud_patterns.items():
-                pattern = info["pattern"]
-                signatures = info["error_signatures"]
-                if pattern in cname:
-                    is_vulnerable = is_orphaned(sub, signatures)
-                    if is_vulnerable:
-                        print(f"[!!!] ALERT: Orphaned Subdomain Found → {sub} [{service}]")
-                    results.append({
-                        "subdomain": sub,
-                        "cname": cname,
-                        "matched_cloud_service": service,
-                        "orphaned": is_vulnerable
-                    })
-
-        # If no CNAME, check A records
-        if not cname:
-            a_records = get_a_record(sub)
-            if a_records:
-                for ip in a_records:
-                    print(f"Checking IP: {ip} for subdomain {sub}")  # Debug line
-                    ip_info = get_ip_info(ip)
-                    if ip_info:
-                        for service, info in cloud_patterns.items():
-                            if ip_info.lower() in info.get("ip_patterns", []):
-                                is_vulnerable = is_orphaned(sub, info["error_signatures"])
-                                if is_vulnerable:
-                                    print(f"[!!!] ALERT: Orphaned Subdomain Found → {sub} [{service}]")
-                                results.append({
-                                    "subdomain": sub,
-                                    "a_record": ip,
-                                    "matched_cloud_service": service,
-                                    "orphaned": is_vulnerable
-                                })
-
-    return results
-
-# === MAIN EXECUTION ===
-if __name__ == "__main__":
-    # Load cloud service patterns from the JSON file
-    cloud_patterns = load_cloud_service_patterns()
-
-    if not cloud_patterns:
-        print("[!] No cloud service patterns loaded.")
-        exit()
+        with open('cloud_services.json', 'r') as f:
+            cloud_services = json.load(f)
+    except FileNotFoundError:
+        print("Error: cloud_services.json not found. Exiting.")
+        return
+    except json.JSONDecodeError:
+         print("Error: Invalid JSON in cloud_services.json. Exiting.")
+         return
 
     # Load subdomains from file
-    subdomains = load_subdomains()
+    try:
+        with open('subdomains.txt', 'r') as f:
+            subdomains = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print("Error: subdomains.txt not found. Exiting.")
+        return
 
-    if not subdomains:
-        print("[!] No subdomains to check.")
-        exit()
+    print("Checking for potential subdomain takeovers...\n")
 
-    # Print how many subdomains are being processed
-    print(f"[+] {len(subdomains)} subdomains found. Checking for potential takeovers...")
+    vulnerable_subdomains = {}
+    for subdomain in subdomains:
+        print(f"Checking {subdomain}...")
+        vulnerable_services = []
+        for service_name, service_config in cloud_services.items():
+            service_config['name'] = service_name # Add 'name' key for easier access
+            is_takeover, service = check_service(subdomain, service_config)
+            if is_takeover:
+                print(f"[POTENTIAL TAKEOVER] {subdomain} might be vulnerable to {service} takeover!")
+                vulnerable_services.append(service)
 
-    # Detect potential takeovers
-    takeovers = detect_potential_takeovers(subdomains, cloud_patterns)
+        if vulnerable_services:
+            vulnerable_subdomains[subdomain] = vulnerable_services
+        else:
+            print(f"{subdomain} does not appear vulnerable to known takeovers.")
 
-    # Print how many takeovers were detected
-    print(f"[+] {len(takeovers)} potential takeover candidates identified.")
+    print("\nScan complete.\n")
+    print("--- Summary of Potential Takeovers ---")
+    if vulnerable_subdomains:
+        for subdomain, services in vulnerable_subdomains.items():
+            print(f"{subdomain}: POTENTIALLY VULNERABLE to {', '.join(services)}")
+            risk, impact = get_risk_impact(services[0]) # Assuming only one potential service for summary
+            print(f"  Risk: {risk}")
+            print(f"  Impact: {impact}")
+    else:
+        print("No potential subdomain takeovers found.")
 
-    print("[+] Script execution completed.")
+if __name__ == "__main__":
+    main()
