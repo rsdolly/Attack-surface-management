@@ -5,60 +5,60 @@ from bs4 import BeautifulSoup
 import ssl
 import socket
 from urllib.parse import urlparse
+from urllib.parse import urljoin
 from tech_fingerprints import detect_technologies
+from asset_discovery import shodan_lookup
 from datetime import datetime, timedelta
 import json
+import time
 
-def query_nvd(cpe_or_name, version=None):
-    api_key = os.getenv("NVD_API_KEY")
-    headers = {"apiKey": api_key} if api_key else {}
+def extract_name_version(text):
+    if not text:
+        return None, None
+    match = re.match(r"^([a-zA-Z0-9_\-\.]+)[/ ]+([0-9\.]+)$", str(text).strip())
+    if match:
+        name = match.group(1).strip()
+        version = match.group(2) if match.group(2) else None
+        return name, version
+    return text, None
 
-    base_url = f"https://services.nvd.nist.gov/rest/json/cves/2.0"
-    params = {
-        "keywordSearch": cpe_or_name,
-        "resultsPerPage": 5,
-        "sortBy": "cvssV3Severity"
-    }
+def query_nvd(product=None, version=None, cpe_list=None):
+    api_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    headers = {"User-Agent": "VulnScanner/1.0"}
+    results = {}
 
-    if version:
-        params["keywordSearch"] += f" {version}"
+    if cpe_list:
+        for cpe in cpe_list:
+            params = {"cpeName": cpe}
+            try:
+                print(f"[*] Searching CVEs for CPE: {cpe}")
+                r = requests.get(api_url, headers=headers, params=params, timeout=20)
+                r.raise_for_status()
+                data = r.json()
+                cve_items = data.get("vulnerabilities", [])
+                results[cpe] = [item["cve"]["id"] for item in cve_items]
+                time.sleep(1.5)  # rate-limiting
+            except Exception as e:
+                print(f"[!] Error for CPE {cpe}: {e}")
 
-    start_date = datetime.now() - timedelta(days=3*365)
-    params["pubStartDate"] = start_date.isoformat() + "Z"
+    elif product and version:
+        keyword = f"{product} {version}"
+        params = {"keywordSearch": keyword}
+        try:
+            print(f"[*] Searching CVEs for Product: {product}, Version: {version}")
+            r = requests.get(api_url, headers=headers, params=params, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+            cve_items = data.get("vulnerabilities", [])
+            results[keyword] = [item["cve"]["id"] for item in cve_items]
+            time.sleep(1.5)
+        except Exception as e:
+            print(f"[!] Error for {product} {version}: {e}")
 
-    try:
-        res = requests.get(base_url, headers=headers, params=params)
-        res.raise_for_status()
-        data = res.json()
+    else:
+        print("[!] query_nvd: No valid input (product/version or CPE list) provided")
 
-        results = []
-        for item in data.get("vulnerabilities", []):
-            cve = item.get("cve", {})
-            metrics = cve.get("metrics", {})
-            cvss = metrics.get("cvssMetricV31") or metrics.get("cvssMetricV30") or [{}]
-
-            results.append({
-                "id": cve.get("id"),
-                "published": cve.get("published"),
-                "lastModified": cve.get("lastModified"),
-                "description": cve.get("descriptions", [{}])[0].get("value"),
-                "severity": cvss[0].get("cvssData", {}).get("baseSeverity"),
-                "cvssScore": cvss[0].get("cvssData", {}).get("baseScore"),
-                "vector": cvss[0].get("cvssData", {}).get("vectorString"),
-                "url": f"https://nvd.nist.gov/vuln/detail/{cve.get('id')}"
-            })
-
-        return results if results else None
-
-    except requests.exceptions.RequestException as e:
-        print(f"[!] Failed to query NVD: Network error - {str(e)}")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"[!] Failed to decode NVD response: {str(e)}")
-        return None
-    except Exception as e:
-        print(f"[!] An unexpected error occurred while querying NVD: {str(e)}")
-        return None
+    return results
 
 def check_ssl_misconfigs(url):
     results = {}
@@ -107,23 +107,29 @@ def check_ssl_misconfigs(url):
 
 def check_sensitive_files(url):
     sensitive_paths = [
-    ".env", ".git/config", ".htaccess", "config.php", "wp-config.php",
-    "database.yml", ".DS_Store", ".bash_history", "id_rsa", "docker-compose.yml",
-    ".svn/entries", ".ftpconfig", ".editorconfig", "package-lock.json", "yarn.lock",
-    "composer.json", "composer.lock", "credentials.json", "secrets.yml", "local.settings.json",
-    "web.config", ".npmrc", ".ssh/config", ".ssh/authorized_keys", "settings.py",
-    "manage.py", "config.json", "config.yml", "application.properties",
-    "application.yml", ".vscode/settings.json", ".idea/workspace.xml", "env.php",
-    "pub/errors/local.xml", "Gemfile", "Gemfile.lock"
-]
+        ".env", ".git/config", ".htaccess", "config.php", "wp-config.php",
+        "database.yml", ".DS_Store", ".bash_history", "id_rsa", "docker-compose.yml",
+        ".svn/entries", ".ftpconfig", ".editorconfig", "package-lock.json", "yarn.lock",
+        "composer.json", "composer.lock", "credentials.json", "secrets.yml", "local.settings.json",
+        "web.config", ".npmrc", ".ssh/config", ".ssh/authorized_keys", "settings.py",
+        "manage.py", "config.json", "config.yml", "application.properties",
+        "application.yml", ".vscode/settings.json", ".idea/workspace.xml", "env.php",
+        "pub/errors/local.xml", "Gemfile", "Gemfile.lock"
+    ]
 
     exposed = []
+    headers = {"User-Agent": "Mozilla/5.0"}
+
     for path in sensitive_paths:
         try:
-            full_url = url.rstrip('/') + '/' + path
-            res = requests.get(full_url, timeout=5)
+            full_url = urljoin(url + '/', path)
+            res = requests.get(full_url, headers=headers, timeout=5)
             if res.status_code == 200 and len(res.text) > 20 and "Not Found" not in res.text:
-                exposed.append(path)
+                exposed.append({
+                    "path": path,
+                    "url": full_url,
+                    "preview": res.text[:100]
+                })
         except requests.RequestException:
             continue
 
@@ -139,10 +145,8 @@ def detect_outdated_versions(name, version):
             return {"status": "unknown", "reason": f"Could not parse version: {version}"}
         current = tuple(map(int, current_match))
 
-        # PyPI Check
-        pypi_url = f"https://pypi.org/pypi/{name}/json"
         try:
-            pypi_res = requests.get(pypi_url, timeout=5)
+            pypi_res = requests.get(f"https://pypi.org/pypi/{name}/json", timeout=5)
             if pypi_res.status_code == 200:
                 latest = pypi_res.json().get("info", {}).get("version", "")
                 latest_match = re.findall(r'\d+', latest)
@@ -155,7 +159,7 @@ def detect_outdated_versions(name, version):
                 else:
                     return {"status": "unknown", "reason": f"Could not parse latest version from PyPI: {latest}"}
         except requests.RequestException:
-            pass # Ignore errors, try npm
+            pass
 
         # npm Check
         npm_url = f"https://registry.npmjs.org/{name}"
@@ -173,7 +177,7 @@ def detect_outdated_versions(name, version):
                 else:
                     return {"status": "unknown", "reason": f"Could not parse latest version from npm: {latest}"}
         except requests.RequestException:
-            pass # Ignore npm errors if PyPI also failed
+            pass
 
         return {"status": "unknown", "reason": "Package information not found on PyPI or npm"}
 
@@ -182,16 +186,22 @@ def detect_outdated_versions(name, version):
 
 def query_exploitdb(tech_name, version=None):
     try:
-        search_term = tech_name if not version else f"{tech_name} {version}"
+        if not tech_name or not tech_name.strip():
+            raise ValueError("Technology name must not be empty.")
+
+        tech_name = tech_name.strip()
+        version = version.strip() if version else ""
+        search_term = f"{tech_name} {version}".strip()
+
         search_url = f"https://www.exploit-db.com/search?q={search_term}"
         response = requests.get(search_url, timeout=10)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
 
+        soup = BeautifulSoup(response.text, "html.parser")
         rows = soup.select("table tbody tr")
         exploits = []
 
-        for row in rows[:5]:  # limit to top 5
+        for row in rows[:5]:
             cols = row.find_all("td")
             if len(cols) >= 2:
                 link = cols[1].find("a")
@@ -204,6 +214,7 @@ def query_exploitdb(tech_name, version=None):
                     exploits.append(exploit)
 
         return exploits if exploits else None
+
     except requests.exceptions.RequestException as e:
         print(f"[!] Error querying ExploitDB: Network error - {str(e)}")
         return None
@@ -211,47 +222,82 @@ def query_exploitdb(tech_name, version=None):
         print(f"[!] An unexpected error occurred while querying ExploitDB: {str(e)}")
         return None
 
-def analyze_vulnerabilities(url):
-    results = {
-        "target": url,
-        "vulnerabilities": {},
-        "ssl_misconfigurations": check_ssl_misconfigs(url),
-        "sensitive_files": check_sensitive_files(url),
-        "outdated_technologies": {}
-    }
+def get_ip_from_url(url):
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc if parsed.netloc else parsed.path  # Handles missing scheme
+        return socket.gethostbyname(domain)
+    except Exception as e:
+        return f"Error resolving IP: {e}"
 
-    fingerprint_result = detect_technologies(url)
-    detected_technologies = fingerprint_result.get("detected_technologies", {})
+def analyze_vulns(url):
+    result = {"target": url}
+    ip_address = get_ip_from_url(url)
+    result["ip_address"] = ip_address if not str(ip_address).startswith("Error") else None
+    
+    shodan_info = shodan_lookup(ip_address=ip_address)
+    # if shodan_info and isinstance(shodan_info, dict):
+    #     result["shodan_info"] = shodan_info
 
-    for tech_type, value in detected_technologies.items():
-        items = []
-        if isinstance(value, str):
-            items = [(value, None)]
-        elif isinstance(value, list):
-            for item in value:
-                parts = item.split()
-                name = parts[0]
-                version = parts[1] if len(parts) > 1 else None
-                items.append((name, version))
-        elif isinstance(value, dict):
-            items = [(k, v) for k, v in value.items()]
+    # Detect technologies
+    tech_result = detect_technologies(url)
+    if tech_result and "detected_technologies" in tech_result:
+        result["detected_technologies"] = tech_result["detected_technologies"]
 
-        for name, version in items:
-            vuln_info = {}
-            if name:
-                vuln_info["CVE_NVD"] = query_nvd(name, version)
-                vuln_info["ExploitDB"] = query_exploitdb(name, version)
-                if version:
-                    outdated_check = detect_outdated_versions(name, version)
-                    vuln_info["OutdatedCheck"] = outdated_check
-                    if outdated_check and outdated_check.get('status') == 'outdated':
-                        results['outdated_technologies'][name] = outdated_check
-            if vuln_info:
-                results["vulnerabilities"][name] = vuln_info
+    # SSL/TLS Misconfiguration
+    ssl_info = check_ssl_misconfigs(url)
+    if ssl_info:
+        result["ssl_check"] = ssl_info
 
-    return results
+    # Sensitive File Discovery
+    sensitive_files = check_sensitive_files(url)
+    if sensitive_files:
+        result["sensitive_files"] = sensitive_files
 
+    # Analyze each detected tech for version issues, CVEs, exploits
+    tech_vulns = []
+    detected = tech_result.get("detected_technologies", {})
+    for category, value in detected.items():
+        if isinstance(value, list):
+            items = value
+        else:
+            items = [value]
+
+        for item in items:
+            name, version = extract_name_version(item)
+            entry = {
+                "name": name,
+                "version": version
+            }
+
+            outdated_info = detect_outdated_versions(name, version)
+            if outdated_info:
+                entry["outdated_check"] = outdated_info
+
+            cve_result = query_nvd(product=name, version=version)
+            if cve_result:
+                entry["nvd_cves"] = cve_result
+
+            exploitdb_result = query_exploitdb(name, version)
+            if exploitdb_result:
+                entry["exploitdb"] = exploitdb_result
+
+            tech_vulns.append(entry)
+
+    if tech_vulns:
+        result["technology_vulnerabilities"] = tech_vulns
+
+    return result
+
+
+
+def main():
+    url = input("Enter the url: ")
+    
+    result = analyze_vulns(url)
+    
+    print("\n=== Full Vulnerability Report ===")
+    print(json.dumps(result, indent=4))
+    
 if __name__ == "__main__":
-    url = input("Enter the URL to analyze: ")
-    vuln_result = analyze_vulnerabilities(url)
-    print(json.dumps(vuln_result, indent=4))
+    main()

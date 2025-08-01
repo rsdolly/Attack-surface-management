@@ -2,15 +2,16 @@ import re
 
 # JavaScript Library Map
 js_library_map = [
-    (re.compile(r'jquery(?:\.min)?\.js(?:\?ver=([\d.]+))?'), 'jQuery'),
-    (re.compile(r'bootstrap(?:\.min)?\.js(?:\?ver=([\d.]+))?'), 'Bootstrap'),
-    (re.compile(r'angular(?:\.min)?\.js(?:\?ver=([\d.]+))?'), 'AngularJS'),
-    (re.compile(r'react(?:\.min)?\.js(?:\?ver=([\d.]+))?'), 'React'),
-    (re.compile(r'vendor(?:\.min)?\.js'), 'Vendor.js'),
-    (re.compile(r'vue(?:\.min)?\.js'), 'Vue.js'),
-    (re.compile(r'next(?:\.min)?\.js'), 'Next.js'),
-    (re.compile(r'nuxt(?:\.min)?\.js'), 'Nuxt.js'),
+    (re.compile(r'jquery(?:[-._]v?[\d.]+)?(?:\.min)?\.js', re.I), 'jQuery'),
+    (re.compile(r'bootstrap(?:[-._]v?[\d.]+)?(?:\.bundle)?(?:\.min)?\.js', re.I), 'Bootstrap'),
+    (re.compile(r'angular(?:[-._]v?[\d.]+)?(?:\.min)?\.js', re.I), 'AngularJS'),
+    (re.compile(r'react(?:[-._]v?[\d.]+)?(?:\.min)?\.js', re.I), 'React'),
+    (re.compile(r'vendor(?:[-._]v?[\d.]+)?(?:\.min)?\.js', re.I), 'Vendor.js'),
+    (re.compile(r'vue(?:[-._]v?[\d.]+)?(?:\.min)?\.js', re.I), 'Vue.js'),
+    (re.compile(r'next(?:[-._]v?[\d.]+)?(?:\.min)?\.js', re.I), 'Next.js'),
+    (re.compile(r'nuxt(?:[-._]v?[\d.]+)?(?:\.min)?\.js', re.I), 'Nuxt.js'),
 ]
+
 
 # Programming Language Patterns
 language_patterns = [
@@ -59,7 +60,9 @@ cdn_patterns = [
     (re.compile(r'azureedge\.net', re.I), "Azure CDN"),
     (re.compile(r'cloudfront\.net', re.I), "Amazon CloudFront"),
     (re.compile(r'netdna-cdn\.com', re.I), "MaxCDN"),
-    (re.compile(r'cachefly\.net', re.I), "CacheFly")
+    (re.compile(r'cachefly\.net', re.I), "CacheFly"),
+    (re.compile(r'\.s3-[a-z0-9\-]+\.amazonaws\.com', re.I), "Amazon S3"),
+    (re.compile(r'(?:https?:)?//unpkg\.com', re.I), "unpkg CDN")
 ]
 
 # Database Patterns
@@ -119,7 +122,10 @@ auth_patterns = [
     (re.compile(r'Bearer\s+[A-Za-z0-9\-_]+\.*[A-Za-z0-9\-_]*\.?[A-Za-z0-9\-_]*'), "JWT Detected"),
     (re.compile(r'auth|login|sign[\-_]?in', re.IGNORECASE), "Login-related Script/Form"),
     (re.compile(r'basic realm="[^"]+"', re.IGNORECASE), "Basic Auth"),
-    (re.compile(r'csrf|xsrf', re.IGNORECASE), "CSRF Protection")
+    (re.compile(r'csrf|xsrf', re.IGNORECASE), "CSRF Protection"),
+    (re.compile(r'accounts\.google\.com/o/oauth2', re.IGNORECASE), "Google OAuth"),
+    (re.compile(r'apis\.google\.com/js/platform\.js', re.IGNORECASE), "Google Sign-In Script")
+    
 ]
 
 ssl_tls_patterns = [
@@ -158,4 +164,29 @@ cms_patterns = [
     (re.compile(r'shopify', re.I), ('Shopify', None)),
     (re.compile(r'typo3', re.I), ('TYPO3', re.compile(r'typo3[-/]?(\d+\.\d+(\.\d+)?)?', re.I))),
     (re.compile(r'contao', re.I), ('Contao', re.compile(r'contao[-/]?(\d+\.\d+(\.\d+)?)?', re.I))),
+]
+
+backend_api = [
+    "/api/","/api/v1/","/api/v2/","/rest/", "/soap/", "/jsonrpc","/xmlrpc", "/graphql", "/wp-json/", "/admin/api/", "/internal-api/", "/public-api/","/data-api/", "/v1/", "/rpc/", "x-api-key", "Bearer ", "/openapi.json", "/swagger.json", "/actuator", "/health"
+]
+
+dev_tools = [
+    "webpack",
+    "babel", 
+    "gulp", 
+    "grunt", 
+    "parcel", 
+    "vite", 
+    "esbuild", 
+    "rollup", 
+    "browserify", 
+    "create-react-app", 
+    "next.config.js", 
+    "vite.config.js", 
+    "webpack.config.js", 
+    "tsconfig.json", 
+    "node_modules", 
+    "devServer", 
+    "sourceMappingURL",
+    "__vite_ping",
 ]

@@ -17,16 +17,13 @@ from tech_patterns import (
     framework_patterns,
     security_headers,
     auth_patterns,
-    ssl_tls_patterns
+    ssl_tls_patterns,
+    backend_api,
+    dev_tools
 )
 
 def detect_cms(html, soup, patterns):
     detected_cms = {}
-
-    # Check headers
-    # No direct access to response in current context, so skipping header check
-
-    # Check meta generator tags
     for tag in soup.find_all('meta', attrs={'name': 'generator'}):
         content = tag.get('content', '')
         for pattern, name_version_regex in patterns:
@@ -59,16 +56,14 @@ def detect_js_libraries(soup, patterns):
         for pattern, name in patterns:
             if pattern.search(src):
                 version = None
-                version_match = re.search(r'[-_]?v?(\d+\.\d+(?:\.\d+)?)', src)
-                if not version_match:
-                    version_match = re.search(r'ver=(\d+\.\d+(?:\.\d+)?)', src)
-
+                # Try to extract version from filename or query
+                version_match = re.search(r'(?:[-_.]?v?|[?&]ver=)(\d+\.\d+(?:\.\d+)?)', src)
                 if version_match:
                     version = version_match.group(1)
-
                 detected_js.add(f"{name} {version}" if version else name)
 
     return sorted(detected_js) if detected_js else None
+
 
 def detect_programming_languages(soup, headers, patterns):
     detected_langs = set()
@@ -107,7 +102,7 @@ def detect_analytics(soup, patterns):
     detected_analytics = set()
 
     # Check all script/link/meta tags for analytics patterns
-    for tag in soup.find_all(['script', 'link', 'meta', 'img']):
+    for tag in soup.find_all(['script', 'link', 'meta', 'img', 'iframe', 'google-analytics']):
         src = tag.get('src') or tag.get('href') or tag.get('content') or ''
         for pattern, name in patterns:
             if pattern.search(src):
@@ -221,7 +216,7 @@ def detect_authentication(soup, patterns):
                 detected_auth.add(name)
 
     # Inline script detection
-    scripts = soup.find_all('script')
+    scripts = soup.find_all('script', 'Authorization', 'set-cookie')
     for script in scripts:
         script_text = script.string or ''
         for pattern, name in patterns:
@@ -238,7 +233,7 @@ def detect_ssl_tls(headers, patterns):
             detected_ssl_tls.add(name)
     return sorted(list(detected_ssl_tls)) if detected_ssl_tls else None
 
-def fetch_page(url, retries=3, delay=5, timeout=20):
+def fetch_page(url, retries=3, delay=5, timeout=40):
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -259,6 +254,22 @@ def fetch_page(url, retries=3, delay=5, timeout=20):
             time.sleep(delay)
 
     return None, f"Failed to fetch {url} after {retries} attempts."
+
+def detect_backend_apis(html, backend_api):
+    detected = []
+    html = html.lower()
+    for api in backend_api:
+        if api.lower() in html:
+            detected.append(api)
+    return detected
+
+def detect_dev_tools(html, tools):
+    detected = []
+    html = html.lower()
+    for tool in tools:
+        if tool.lower() in html:
+            detected.append(tool)
+    return detected
 
 def detect_technologies(url):
     try:
@@ -288,7 +299,10 @@ def detect_technologies(url):
         "Security Headers": detect_security_headers(headers, security_headers),
         "Databases": detect_database(html, database_patterns),
         "Authentication": detect_authentication(soup, auth_patterns),
-        "SSL/TLS": detect_ssl_tls(headers, ssl_tls_patterns)
+        "SSL/TLS": detect_ssl_tls(headers, ssl_tls_patterns),
+        "Hosting/CDN Info": headers.get("Via") or headers.get("CF-RAY"),
+        "Backend APIs Detected": detect_backend_apis(html, backend_api),
+        "Developer Tools Detected": detect_dev_tools(html, dev_tools)
     }
     
     filtered_detected = {}
@@ -301,8 +315,26 @@ def detect_technologies(url):
         "detected_technologies": filtered_detected
     }
 
-if __name__ == "__main__":
-    url = input("Enter the URL to fingerprint: ")
+def is_reachable(url):
+    try:
+        response = requests.get(url, timeout=5)
+        return response.status_code < 400
+    except requests.RequestException:
+        return False
+
+def main():
+    user_input = input("Enter the domain or URL to fingerprint: ").strip()
+    if not re.match(r'^https?://', user_input):
+        https_url = f"https://{user_input}"
+        http_url = f"http://{user_input}"
+        url = https_url if is_reachable(https_url) else http_url
+    else:
+        url = user_input
+
     results = detect_technologies(url)
     print(json.dumps(results, indent=4))
+    
+if __name__ == "__main__":
+    main()
+
 

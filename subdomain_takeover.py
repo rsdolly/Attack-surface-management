@@ -2,6 +2,25 @@ import dns.resolver
 import requests
 import json
 import ipaddress
+import subprocess
+import os
+import time
+
+def wait_for_subdomain_file(file_path, timeout=120):
+    print(f"\n[!] Please run the following command in your terminal:\n")
+    print(f"    python ./sublist3r/sublist3r.py -d {domain} -o subdomains.txt\n")
+    print("[*] Waiting for subdomains.txt to be created...")
+
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            print("[+] subdomains.txt found. Proceeding...")
+            return True
+        time.sleep(3)
+
+    print("[!] Timeout reached. subdomains.txt was not created.")
+    return False
+
 
 def check_service(subdomain, service_config):
     """Checks if a subdomain points to an unclaimed cloud service."""
@@ -41,68 +60,108 @@ def check_service(subdomain, service_config):
     return False, None
 
 def get_risk_impact(service):
-    """Returns a brief risk and impact description for a given service."""
-    risk_impact = {
-        "AWS S3": (
-            "Risk: Unauthorized access to data in a previously associated S3 bucket.",
-            "Impact: Data breaches, data loss, serving malicious content."
-        ),
-        "GitHub Pages": (
-            "Risk: Hosting malicious content or phishing pages on a trusted subdomain.",
-            "Impact: Brand impersonation, credential theft, malware distribution."
-        ),
-        "Heroku": (
-            "Risk: Hosting unwanted applications or content on the subdomain.",
-            "Impact: Brand damage, misleading or malicious activity."
-        ),
-        "Bitbucket": (
-            "Risk: Potential to host content if the Bitbucket Pages repo was deleted.",
-            "Impact: Brand damage, potential for malicious content."
-        ),
-        "Shopify": (
-            "Risk: An attacker could claim the subdomain for a new, malicious Shopify store.",
-            "Impact: Phishing attacks, brand impersonation, fraudulent activities."
-        ),
-        "Fastly": (
-            "Risk: An attacker could configure the subdomain in their Fastly account.",
-            "Impact: Brand damage, serving malicious content or phishing pages."
-        ),
-        "Google Cloud Storage": (
-            "Risk: Unauthorized access to or control over content in a GCS bucket.",
-            "Impact: Data breaches, data loss, serving malicious content."
-        ),
-        "Microsoft Azure": (
-            "Risk: Ability to host unwanted content or apps via Azure App Service.",
-            "Impact: Brand damage, misleading or malicious activity."
-        ),
-        "Cloudflare": (
-            "Risk: An attacker could add the subdomain to their Cloudflare account.",
-            "Impact: Brand impersonation, serving malicious content or phishing pages."
-        )
+    data = {
+        "AWS S3": {
+            "risk": "Unauthorized access to unclaimed S3 bucket.",
+            "threat": "Malicious content hosting or sensitive data exposure.",
+            "vulnerability": "Dangling S3 DNS pointer.",
+            "impact": "Data breach, malware delivery.",
+            "severity": "High"
+        },
+        "GitHub Pages": {
+            "risk": "Phishing or impersonation via abandoned GitHub Pages.",
+            "threat": "Credential theft, reputation damage.",
+            "vulnerability": "Unlinked GitHub repo or deleted project.",
+            "impact": "Loss of trust, brand misuse.",
+            "severity": "Medium"
+        },
+        "Heroku": {
+            "risk": "Hosting of untrusted apps via unlinked subdomain.",
+            "threat": "Malicious apps, data leakage.",
+            "vulnerability": "Orphaned Heroku app name.",
+            "impact": "Brand damage, user targeting.",
+            "severity": "Medium"
+        },
+        "Bitbucket": {
+            "risk": "Public or misleading content hosted on subdomain.",
+            "threat": "Reputation loss, misinformation.",
+            "vulnerability": "Deleted Bitbucket Pages repo.",
+            "impact": "Brand impersonation.",
+            "severity": "Low"
+        },
+        "Shopify": {
+            "risk": "Creation of malicious store on forgotten subdomain.",
+            "threat": "Phishing, scam store setup.",
+            "vulnerability": "Unregistered Shopify store DNS.",
+            "impact": "Fraudulent sales, customer deception.",
+            "severity": "High"
+        },
+        "Fastly": {
+            "risk": "Attacker takes control over the CDN endpoint.",
+            "threat": "Malware distribution, fake site hosting.",
+            "vulnerability": "DNS points to unused Fastly service.",
+            "impact": "Brand impersonation, MITM.",
+            "severity": "High"
+        },
+        "Google Cloud Storage": {
+            "risk": "Exposure or abuse of previous GCS bucket.",
+            "threat": "Serving infected files, credential leaks.",
+            "vulnerability": "Dangling Google Cloud Storage bucket.",
+            "impact": "Data breach, SEO poisoning.",
+            "severity": "High"
+        },
+        "Microsoft Azure": {
+            "risk": "Abandoned subdomain points to Azure App Service.",
+            "threat": "Malicious web app hosting.",
+            "vulnerability": "Unclaimed Azure subdomain.",
+            "impact": "Reputation and trust loss.",
+            "severity": "Medium"
+        },
+        "Cloudflare": {
+            "risk": "Attacker configures orphaned domain in their account.",
+            "threat": "Phishing, spoofed content delivery.",
+            "vulnerability": "DNS points to Cloudflare without claim.",
+            "impact": "Fake site delivery via CDN.",
+            "severity": "Medium"
+        }
     }
-    return risk_impact.get(service, ("Risk: Unknown", "Impact: Unknown"))
+    return data.get(service, {
+        "risk": "Unknown",
+        "threat": "Unknown",
+        "vulnerability": "Unknown",
+        "impact": "Unknown",
+        "severity": "Unknown"
+    })
+
 
 def main():
-    # Load cloud services from JSON
+    global domain
+    domain = input("Enter the target domain: ").strip()
+    output_file = 'subdomains.txt'
+
+    # Ask user to run Sublist3r manually and wait for output
+    if not wait_for_subdomain_file(output_file, timeout=180):
+        return
+
+    # Load cloud service fingerprints
     try:
         with open('cloud_services.json', 'r') as f:
             cloud_services = json.load(f)
     except FileNotFoundError:
-        print("Error: cloud_services.json not found. Exiting.")
+        print("Error: cloud_services.json not found.")
         return
     except json.JSONDecodeError:
-         print("Error: Invalid JSON in cloud_services.json. Exiting.")
-         return
-
-    # Load subdomains from file
-    try:
-        with open('subdomains.txt', 'r') as f:
-            subdomains = [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        print("Error: subdomains.txt not found. Exiting.")
+        print("Error: Invalid JSON format in cloud_services.json.")
         return
 
-    print("Checking for potential subdomain takeovers...\n")
+    try:
+        with open(output_file, 'r') as f:
+            subdomains = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print("Error: subdomains.txt not found.")
+        return
+
+    print("\nChecking for potential subdomain takeovers...\n")
 
     vulnerable_subdomains = {}
     for subdomain in subdomains:
@@ -122,12 +181,29 @@ def main():
 
     print("\nScan complete.\n")
     print("--- Summary of Potential Takeovers ---")
+
     if vulnerable_subdomains:
+        print("{:<35} {:<15} {:<20} {:<30} {:<35} {:<10}".format(
+            "Subdomain", "Severity", "Risk", "Threat", "Vulnerability", "Impact"))
+        print("=" * 150)
+
         for subdomain, services in vulnerable_subdomains.items():
-            print(f"{subdomain}: POTENTIALLY VULNERABLE to {', '.join(services)}")
-            risk, impact = get_risk_impact(services[0]) # Assuming only one potential service for summary
-            print(f"  Risk: {risk}")
-            print(f"  Impact: {impact}")
+            for service in services:
+                info = get_risk_impact(service)
+                severity = info["severity"]
+
+                # Color-coded severity
+                if severity == "High":
+                    color = "\033[91m"  # Red
+                elif severity == "Medium":
+                    color = "\033[93m"  # Yellow
+                elif severity == "Low":
+                    color = "\033[92m"  # Green
+                else:
+                    color = "\033[0m"  
+
+                reset = "\033[0m"
+                print(f"{subdomain:<35} {color}{severity:<15}{reset} {info['risk']:<20} {info['threat']:<30} {info['vulnerability']:<35} {info['impact']:<10}")
     else:
         print("No potential subdomain takeovers found.")
 

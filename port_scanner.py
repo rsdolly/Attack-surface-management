@@ -1,108 +1,89 @@
-import nmap
-import json
-import socket
+import subprocess
+import re
 import os
-from datetime import datetime
+import platform
 
-os.environ["PATH"] += os.pathsep + r"C:\Program Files (x86)\Nmap"
+def is_valid_target(target):
+    ip_regex = r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+    domain_regex = r"^(?!-)[A-Za-z0-9.-]+(?<!-)$"
+    return re.match(ip_regex, target) or re.match(domain_regex, target)
 
-def scan_target(target, nmap_args='-sV -T4'):
-    scanner = nmap.PortScanner()
+def is_safe_script_name(script):
+    return re.match(r"^[a-zA-Z0-9_,.-]+$", script)
 
+def run_nmap_with_script(target, script):
+    if not is_safe_script_name(script):
+        print("[!] Invalid script name.")
+        return
     try:
-        print(f"\n[+] Scanning {target} with arguments: {nmap_args}")
-        scanner.scan(hosts=target, arguments=nmap_args)
+        print(f"\n[+] Running: nmap -sV --script {script} -T5 {target}\n")
+        subprocess.run(["nmap", "-sV", f"--script={script}", "-T5", target], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"[!] Nmap scan failed: {e}")
 
-        if not scanner.all_hosts():
-            print("[-] No host found or Nmap scan failed.")
-            return None
+def get_nmap_scripts_path():
+    possible_paths = []
 
-        results = {
-            "target": target,
-            "scan_time": str(datetime.now()),
-            "nmap_args": nmap_args,
-            "open_ports": []
-        }
+    if platform.system() == "Windows":
+        possible_paths = [
+            r"C:\Program Files (x86)\Nmap\scripts",
+            r"C:\Program Files\Nmap\scripts"
+        ]
+    else:
+        possible_paths = [
+            "/usr/share/nmap/scripts",
+            "/usr/local/share/nmap/scripts"
+        ]
 
-        for host in scanner.all_hosts():
-            print(f"\n[+] Host: {host} ({scanner[host].hostname()})")
-            print(f"[+] State: {scanner[host].state()}")
+    for path in possible_paths:
+        if os.path.isdir(path):
+            return path
+    return None
 
-            for proto in scanner[host].all_protocols():
-                ports = scanner[host][proto].keys()
-                for port in sorted(ports):
-                    service = scanner[host][proto][port]
-                    port_info = {
-                        "port": port,
-                        "state": service['state'],
-                        "name": service['name'],
-                        "product": service.get('product', ''),
-                        "version": service.get('version', ''),
-                        "extrainfo": service.get('extrainfo', ''),
-                        "cpe": service.get('cpe', '')
-                    }
-                    results["open_ports"].append(port_info)
-                    print(f" - Port {port}/{proto} is {service['state']} -> {service['name']} {service.get('product','')} {service.get('version','')}")
+def search_nmap_scripts(keyword):
+    script_path = get_nmap_scripts_path()
+    if not script_path:
+        print("[!] Could not find Nmap scripts directory.")
+        return {}
 
-        return results
+    scripts = [f for f in os.listdir(script_path) if keyword.lower() in f.lower() and f.endswith(".nse")]
 
-    except Exception as e:
-        print(f"[!] Error scanning {target}: {e}")
-        return None
+    if not scripts:
+        print("[!] No matching scripts found.")
+        return {}
 
-def scan_ports(url, ports_arg=None):
-    try:
-        target = url.replace("https://", "").replace("http://", "").strip("/")
-        nmap_args = '-sV -T4'
+    print("\n[+] Matching Nmap Scripts:")
+    script_dict = {}
+    for i, script in enumerate(scripts):
+        print(f"  {i}: {script}")
+        script_dict[str(i)] = script
+    return script_dict
 
-        if ports_arg:
-            nmap_args += f' -p {ports_arg}'
+def main():
+    target = input("Enter target domain or IP: ").strip()
+    if not target or not is_valid_target(target):
+        print("[!] Invalid target.")
+        return
 
-        result = scan_target(target, nmap_args)
+    script_choice = input("\nEnter script category (e.g., vuln, default) or press Enter for default: ").strip().lower()
+    script_choice = script_choice if script_choice else "default"
+    run_nmap_with_script(target, script_choice)
 
-        if result:
-            return result
-        else:
-            return {"error": "Nmap scan failed or no host found."}
+    while True:
+        next_step = input("\nWould you like to search for any script? Type keyword or press Enter to exit: ").strip()
+        if not next_step:
+            break
 
-    except Exception as e:
-        return {"error": str(e)}
-
-def save_results(result, filename="scan_results.json"):
-    try:
-        with open(filename, 'w') as f:
-            json.dump(result, f, indent=4)
-        print(f"\n[+] Scan results saved to {filename}")
-    except Exception as e:
-        print(f"[!] Failed to save results: {e}")
+        found = search_nmap_scripts(next_step)
+        if found:
+            run_choice = input("\nType 'run <serial>' to run that script, or press Enter to cancel: ").strip()
+            if run_choice.startswith("run "):
+                parts = run_choice.split()
+                if len(parts) == 2 and parts[1] in found:
+                    script_name = found[parts[1]]
+                    run_nmap_with_script(target, script_name)
+                else:
+                    print("[!] Invalid serial number.")
 
 if __name__ == "__main__":
-    target_input = input("Enter a single IP/domain or path to a .txt file with targets: ").strip()
-    enable_scripts = input("Enable Nmap default scripts (-sC)? (y/n): ").strip().lower() == 'y'
-
-    nmap_args = '-sV -T4'
-    if enable_scripts:
-        nmap_args += ' -sC'
-
-    targets = []
-
-    if os.path.isfile(target_input):
-        with open(target_input, 'r') as f:
-            targets = [line.strip() for line in f if line.strip()]
-    else:
-        try:
-            socket.gethostbyname(target_input)
-            targets = [target_input]
-        except socket.gaierror:
-            print("[-] Invalid IP/domain or file.")
-            exit()
-
-    all_results = []
-
-    for target in targets:
-        result = scan_target(target, nmap_args)
-        if result:
-            all_results.append(result)
-
-    if all_results:
-        save_results(all_results)
+    main()
