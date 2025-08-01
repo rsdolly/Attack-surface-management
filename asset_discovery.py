@@ -27,7 +27,7 @@ def shodan_lookup(ip_address=None, domain=None):
             return {"error": f"Failed to resolve domain '{domain}': {str(e)}"}
 
     try:
-        # Validate resolved IP
+
         ipaddress.ip_address(ip_address)
     except ValueError:
         return {"error": "Invalid IP address format."}
@@ -36,7 +36,6 @@ def shodan_lookup(ip_address=None, domain=None):
         api = shodan.Shodan(api_key)
         host = api.host(ip_address)
 
-        # Extract full details
         result = {
             "ip": host.get("ip_str", ip_address),
             "organization": host.get("org", "N/A"),
@@ -86,7 +85,6 @@ def dns_lookup(input_value):
         records = {}
         resolver = dns.resolver.Resolver()
 
-        # Determine if input is IP or domain
         try:
             ipaddress.ip_address(input_value)
             is_ip = True

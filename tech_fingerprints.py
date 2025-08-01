@@ -323,14 +323,7 @@ def is_reachable(url):
         return False
 
 def main():
-    user_input = input("Enter the domain or URL to fingerprint: ").strip()
-    if not re.match(r'^https?://', user_input):
-        https_url = f"https://{user_input}"
-        http_url = f"http://{user_input}"
-        url = https_url if is_reachable(https_url) else http_url
-    else:
-        url = user_input
-
+    url = input("Enter the URL to fingerprint: ").strip()
     results = detect_technologies(url)
     print(json.dumps(results, indent=4))
     

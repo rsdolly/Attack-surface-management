@@ -24,12 +24,8 @@ def run_scanner(choice):
         RESULTS.append({
             "scanner": SCANNERS[choice][0],
             "output": result if result else "No output"
-})
-        # module.main()
-        # RESULTS.append({
-        #     "scanner": SCANNERS[choice][0],
-        #     "output": "See console for full output"
-        # })
+        })
+
     except Exception as e:
         print(f"[!] Error running scanner: {e}")
 

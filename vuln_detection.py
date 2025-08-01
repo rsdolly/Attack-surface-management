@@ -72,7 +72,6 @@ def check_ssl_misconfigs(url):
             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                 cert = ssock.getpeercert()
 
-                # Certificate validity
                 valid_from = datetime.strptime(cert['notBefore'], "%b %d %H:%M:%S %Y %Z")
                 valid_to = datetime.strptime(cert['notAfter'], "%b %d %H:%M:%S %Y %Z")
                 now = datetime.utcnow()
@@ -83,10 +82,8 @@ def check_ssl_misconfigs(url):
                 results["expired"] = now > valid_to
                 results["not_yet_valid"] = now < valid_from
 
-                # TLS version
                 results["tls_version"] = ssock.version()
 
-                # Cipher details
                 cipher = ssock.cipher()
                 results["cipher"] = {
                     "name": cipher[0],
@@ -236,25 +233,18 @@ def analyze_vulns(url):
     result["ip_address"] = ip_address if not str(ip_address).startswith("Error") else None
     
     shodan_info = shodan_lookup(ip_address=ip_address)
-    # if shodan_info and isinstance(shodan_info, dict):
-    #     result["shodan_info"] = shodan_info
-
-    # Detect technologies
     tech_result = detect_technologies(url)
     if tech_result and "detected_technologies" in tech_result:
         result["detected_technologies"] = tech_result["detected_technologies"]
 
-    # SSL/TLS Misconfiguration
     ssl_info = check_ssl_misconfigs(url)
     if ssl_info:
         result["ssl_check"] = ssl_info
 
-    # Sensitive File Discovery
     sensitive_files = check_sensitive_files(url)
     if sensitive_files:
         result["sensitive_files"] = sensitive_files
 
-    # Analyze each detected tech for version issues, CVEs, exploits
     tech_vulns = []
     detected = tech_result.get("detected_technologies", {})
     for category, value in detected.items():

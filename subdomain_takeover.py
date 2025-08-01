@@ -2,7 +2,6 @@ import dns.resolver
 import requests
 import json
 import ipaddress
-import subprocess
 import os
 import time
 
@@ -37,15 +36,12 @@ def check_service(subdomain, service_config):
                             return True, service_config['name']
                 except requests.exceptions.RequestException:
                     pass
-
-        # Additional check: verify IP address ranges
         try:
             answers = resolver.resolve(subdomain, 'A')
             for rdata in answers:
                 ip_address = str(rdata)
                 for ip_range in service_config.get('ip_patterns', []):
                     if ipaddress.ip_address(ip_address) in ipaddress.ip_network(ip_range):
-                        # If CNAME check failed, but IP matches, it might be a takeover
                         return True, service_config['name']
 
         except dns.resolver.NXDOMAIN:
@@ -139,11 +135,10 @@ def main():
     domain = input("Enter the target domain: ").strip()
     output_file = 'subdomains.txt'
 
-    # Ask user to run Sublist3r manually and wait for output
     if not wait_for_subdomain_file(output_file, timeout=180):
         return
 
-    # Load cloud service fingerprints
+
     try:
         with open('cloud_services.json', 'r') as f:
             cloud_services = json.load(f)
@@ -168,7 +163,7 @@ def main():
         print(f"Checking {subdomain}...")
         vulnerable_services = []
         for service_name, service_config in cloud_services.items():
-            service_config['name'] = service_name # Add 'name' key for easier access
+            service_config['name'] = service_name
             is_takeover, service = check_service(subdomain, service_config)
             if is_takeover:
                 print(f"[POTENTIAL TAKEOVER] {subdomain} might be vulnerable to {service} takeover!")
